@@ -19,6 +19,7 @@ import ru.yourok.torrserve.app.App
 import ru.yourok.torrserve.atv.Utils
 import ru.yourok.torrserve.server.models.torrent.Torrent
 import ru.yourok.torrserve.settings.Settings
+import ru.yourok.torrserve.ui.activities.main.MainActivity
 import ru.yourok.torrserve.ui.activities.play.PlayActivity
 import ru.yourok.torrserve.ui.fragments.TSFragment
 import ru.yourok.torrserve.utils.TorrentHelper
@@ -28,7 +29,7 @@ class TorrentsFragment : TSFragment() {
 
     private var torrentAdapter: TorrentsAdapter? = null
     private lateinit var emptyView: TextView
-    private var sortMode: Boolean = Settings.sortTorrByTitle
+    private var sortMode: Int = Settings.get("sort_mode_int", 0)
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -77,40 +78,52 @@ class TorrentsFragment : TSFragment() {
             (viewModel as TorrentsViewModel).setUpdate(false)
     }
 
-    fun sort(mode: Boolean = sortMode) {
-        val list = torrentAdapter!!.list
-        if (list.size > 0) {
-            when (mode) {
-                false -> {
-                    torrentAdapter?.update(list.sortedBy { it.title })
-                    App.toast(R.string.sort_by_name)
-                }
-
-                true -> {
-                    torrentAdapter?.update(list.sortedByDescending { it.timestamp })
-                    App.toast(R.string.sort_by_date)
-                }
-            }
-            sortMode = !mode
-            Settings.set("sort_torrents", sortMode)
-            activity?.findViewById<ListView>(R.id.lvTorrents)?.apply {
-                this.setSelection(0)
-                requestFocus()
-            }
+    private fun applySort(list: List<Torrent>): List<Torrent> {
+        return when (sortMode) {
+            0 -> list.sortedBy { it.timestamp }
+            1 -> list.sortedByDescending { it.timestamp }
+            2 -> list.sortedBy { it.title }
+            3 -> list.sortedByDescending { it.title }
+            4 -> list.sortedBy { it.torrent_size }
+            5 -> list.sortedByDescending { it.torrent_size }
+            else -> list
         }
+    }
+
+    fun sort() {
+        sortMode = (sortMode + 1) % 6
+        Settings.set("sort_mode_int", sortMode)
+        
+        val list = torrentAdapter?.list ?: return
+        val sortedList = applySort(list)
+        torrentAdapter?.update(sortedList)
+        
+        when (sortMode) {
+            0 -> App.toast("Сортировка: по дате (возрастание)")
+            1 -> App.toast("Сортировка: по дате (убывание)")
+            2 -> App.toast("Сортировка: по имени (возрастание)")
+            3 -> App.toast("Сортировка: по имени (убывание)")
+            4 -> App.toast("Сортировка: по размеру (возрастание)")
+            5 -> App.toast("Сортировка: по размеру (убывание)")
+        }
+        
+        activity?.findViewById<ListView>(R.id.lvTorrents)?.setSelection(0)
     }
 
     suspend fun filter(cat: String = "") = withContext(Dispatchers.Main) {
         val data = (viewModel as TorrentsViewModel).getData()
-        data.observe(this@TorrentsFragment) { list ->
+        data.observe(viewLifecycleOwner) { list ->
             val fltList = if (cat == "uncategorized")
                 list.filter { it.category.isNullOrBlank() }
             else if (cat.isNotBlank())
                 list.filter { it.category?.contains(cat, true) == true }
             else
                 list
-            torrentAdapter?.update(fltList)
-            if (fltList.isEmpty()) {
+                
+            val sortedList = applySort(fltList)
+            torrentAdapter?.update(sortedList)
+            
+            if (sortedList.isEmpty()) {
                 emptyView.visibility = View.VISIBLE
             } else {
                 emptyView.visibility = View.GONE
@@ -122,13 +135,17 @@ class TorrentsFragment : TSFragment() {
         viewModel = ViewModelProvider(this@TorrentsFragment)[TorrentsViewModel::class.java]
         val data = (viewModel as TorrentsViewModel).getData()
         (viewModel as TorrentsViewModel).setUpdate(true)
-        data.observe(this@TorrentsFragment) {
-            torrentAdapter?.update(it)
-            if (it.isEmpty()) {
+        data.observe(viewLifecycleOwner) { rawList ->
+            val sortedList = applySort(rawList)
+            torrentAdapter?.update(sortedList)
+            
+            if (sortedList.isEmpty()) {
                 emptyView.visibility = View.VISIBLE
             } else {
                 emptyView.visibility = View.GONE
             }
+            
+            (activity as? MainActivity)?.setupSortFab()
         }
     }
 
@@ -167,7 +184,7 @@ class TorrentsFragment : TSFragment() {
 
             KeyEvent.KEYCODE_MENU,
             KeyEvent.KEYCODE_BUTTON_X -> {
-                sort(sortMode)
+                sort()
                 if (Utils.isTvBox()) return true
             }
 
