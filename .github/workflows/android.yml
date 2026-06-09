@@ -1,6 +1,6 @@
 name: Android CI
 
-oon:
+on:
   push:
     tags:
       - "*"
