@@ -78,7 +78,8 @@ class MainActivity : AppCompatActivity() {
     private val isInTorrents: Boolean
         get() {
             val f = supportFragmentManager.findFragmentById(R.id.container)
-            return f is TorrentsFragment
+            // Дополнительно проверяем, что вью фрагмента успешно создано и прикреплено
+            return f is TorrentsFragment && f.view != null
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -147,8 +148,9 @@ class MainActivity : AppCompatActivity() {
         themeUtil.onResume(this)
         //TorrService.start()
         updateStatus()
-        if (Settings.showFab) setupFab()
-        if (Settings.showSortFab) setupSortFab()
+        if (Settings.showFab) setupFab()               //Проверка глобального флага showFab из настроек. Если показ основной FAB-кнопки (для открытия бокового меню) разрешен, вызывается метод её настройки и отображения setupFab().
+    //    if (Settings.showSortFab) setupSortFab()       //Проверка глобального флага showSortFab. Если показ кнопки сортировки разрешен пользователем, вызывается метод инициализации setupSortFab().
+	    setupSortFab()
         lifecycleScope.launch(Dispatchers.IO) {
             if (TorrService.wait(10) && isShowCat()) {
                 withContext(Dispatchers.Main) {
@@ -224,17 +226,21 @@ class MainActivity : AppCompatActivity() {
         override fun onDrawerOpened(drawerView: View) {
             super.onDrawerOpened(drawerView)
 
-            if (Settings.showFab) showFab(false)
-            if (Settings.showSortFab) showSortFab(false)
+            if (Settings.showFab) showFab(false)             //Если в глобальных настройках включен показ основной FAB (кнопки вызова меню), метод скрывает её (false), чтобы она не мешала работе с открытым меню.
+     //       if (Settings.showSortFab) showSortFab(false)     //Если в настройках активирован показ кнопки сортировки, метод принудительно скрывает её с экрана при открытии меню.
+	        showSortFab(false)
             lifecycleScope.launch(Dispatchers.IO) {
                 if (isShowCat()) withContext(Dispatchers.Main) { showCatFab(false) }
             }
         }
 
-        override fun onDrawerClosed(drawerView: View) {
+        override fun onDrawerClosed(drawerView: View) {             //Переопределение метода, который автоматически срабатывает в момент, когда боковая панель полностью закрывается пользователем.
             super.onDrawerClosed(drawerView)
-            if (Settings.showFab) showFab()
-            if (Settings.showSortFab && isInTorrents) showSortFab()
+            if (Settings.showFab) showFab()                                  //Если показ основной кнопки меню разрешен в настройках, возвращает её на экран (вызов без аргументов по умолчанию передает true).
+     //       if (Settings.showSortFab && isInTorrents) showSortFab()          //Если показ кнопки сортировки разрешен И пользователь все еще находится на экране списка торрентов, восстанавливает видимость этой кнопки.
+	        if (isInTorrents) {
+        showSortFab(true)
+    }
             lifecycleScope.launch(Dispatchers.IO) {
                 if (isShowCat() && isInTorrents)
                     withContext(Dispatchers.Main) { showCatFab() }
@@ -338,47 +344,52 @@ class MainActivity : AppCompatActivity() {
             fab?.hide()
     }
 
-    private fun setupSortFab() {
-        if (Utils.isTvBox()) return
+    fun setupSortFab() {           //Объявление закрытого метода конфигурации плавающей кнопки сортировки, доступного только внутри MainActivity.
+    if (Utils.isTvBox()) return              //Проверка аппаратной платформы: если приложение запущено на ТВ-приставке, метод завершается, скрывая сенсорный элемент управления.
 
-        val accentColor = ThemeUtil.getColorFromAttr(this, R.attr.colorAccent)
-        val actionsColor = ThemeUtil.getColorFromAttr(this, R.attr.colorMainMenu)
+    val fab = findViewById<FloatingActionButton>(R.id.sort_fab) ?: return        //Поиск кнопки по правильному ID R.id.sort_fab с безопасным выходом из функции через return, если элемент отсутствует в текущей разметке.
+    val currentMode = Settings.get("sort_mode_int", 0)                           //Запрос к SharedPreferences для получения текущего сохраненного индекса сортировки (от 0 до 5). По умолчанию возвращается 0.
 
-        val fab: FloatingActionButton? = findViewById(R.id.sort_fab)
-        fab?.apply {
-            if (Settings.sortTorrByTitle)
-                setImageDrawable(AppCompatResources.getDrawable(this.context, R.drawable.round_filter_list_24))
-            else
-                setImageDrawable(AppCompatResources.getDrawable(this.context, R.drawable.round_sort_by_alpha_24))
-            customSize = dp2px(32f)
-            setMaxImageSize(dp2px(24f))
-            backgroundTintList = ColorStateList.valueOf(actionsColor)
-            setColorFilter(accentColor)
-            setRippleColor(ColorStateList.valueOf(accentColor))
-            setOnClickListener {
-                if (isInTorrents) {
-                    val f = supportFragmentManager.findFragmentById(R.id.container)
-                    (f as TorrentsFragment?)?.sort()
-                }
-                if (Settings.sortTorrByTitle)
-                    setImageDrawable(AppCompatResources.getDrawable(this.context, R.drawable.round_filter_list_24))
-                else
-                    setImageDrawable(AppCompatResources.getDrawable(this.context, R.drawable.round_sort_by_alpha_24))
-            }
-        }
-        // visibility change
-        if (isInTorrents)
-            showSortFab()
-        else
-            showSortFab(false)
+    val accentColor = ThemeUtil.getColorFromAttr(this, R.attr.colorAccent)        //Динамическое извлечение цвета акцента из активной темы оформления приложения для последующего окрашивания контура иконки.
+    val actionsColor = ThemeUtil.getColorFromAttr(this, R.attr.colorMainMenu)     //Извлечение фонового цвета главного меню из текущей темы для его применения к подложке круглой кнопки.
+
+    val iconRes = when (currentMode) {                 //Начало блока условного ветвления when для определения переменной iconRes на основе числового индекса режима.
+        0 -> R.drawable.ic_sort_time_asc                 //Переключение на новую иконку хронологической сортировки по дате во временном порядке по возрастанию.
+        1 -> R.drawable.ic_sort_time_desc
+        2 -> R.drawable.round_sort_by_alpha_24          //Использование стандартной системной круглой иконки для прямого алфавитного порядка (от А до Я).
+        3 -> R.drawable.ic_sort_alpha_desc
+        4 -> R.drawable.ic_sort_size_asc
+        5 -> R.drawable.ic_sort_size_desc
+        else -> R.drawable.round_filter_list_24
     }
 
-    private fun showSortFab(show: Boolean = true) {
-        val fab: FloatingActionButton? = findViewById(R.id.sort_fab)
-        if (show)
-            fab?.show()
-        else
-            fab?.hide()
+    fab.apply {                                       //Вызов функции расширения apply для выполнения цепочки внутренних настроек объекта fab без постоянного дублирования его имени.
+        setImageResource(iconRes)                    //Принудительное изменение текущей векторной графики внутри кнопки на выбранный ресурс iconRes.
+        customSize = dp2px(32f)                           //Установка фиксированного компактного диаметра кнопки в 32dp с конвертацией в физические пиксели экрана.
+        setMaxImageSize(dp2px(24f))                         //Масштабирование внутренней векторной картинки до размера 24dp для центрирования и исключения размытия контуров.
+        backgroundTintList = ColorStateList.valueOf(actionsColor)        //Установка цвета заливки круглой подложки кнопки в соответствии с извлеченным цветом темы actionsColor.
+        setColorFilter(accentColor)                                       //Окрашивание линий и стрелок векторной иконки внутри кнопки в цвет акцента темы accentColor.
+        setRippleColor(ColorStateList.valueOf(accentColor))               //Задание цвета анимации пульсации (эффекта водяной ряби) при физическом нажатии на кнопку пользователем.
+        setOnClickListener {                                             //Регистрация стандартного слушателя событий клика на кнопку сортировки.
+            val f = supportFragmentManager.findFragmentById(R.id.container)       //Динамический поиск и получение ссылки на текущий фрагмент, отображаемый в основном контейнере активности.
+            if (f is TorrentsFragment) {                                             //Проверка типа: код выполняется только в том случае, если пользователь находится на экране списка торрентов.
+                f.sort()                                 //Вызов автономного метода сортировки во фрагменте для инкремента индекса, перезаписи настроек и перестроения списка.
+                setupSortFab()                              //Рекурсивный вызов родительской функции для мгновенного считывания обновленного значения из памяти и изменения иконки.
+            }
+        }
+    }
+}
+
+    fun showSortFab(show: Boolean = true) {
+        val fab = findViewById<FloatingActionButton>(R.id.sort_fab) ?: return
+
+        // КОРРЕКТИРОВКА: Полностью убираем ветку скрытия (View.GONE).
+        // Кнопка всегда удерживается в состоянии VISIBLE, выносится на передний план и сбрасывает масштабы.
+        fab.bringToFront()
+        fab.visibility = View.VISIBLE
+        fab.scaleX = 1.0f
+        fab.scaleY = 1.0f
+        fab.alpha = 1.0f
     }
 
     private var isCatsOpen = false
@@ -487,11 +498,11 @@ class MainActivity : AppCompatActivity() {
                 isCatsOpen = false
             }
         }
-        // visibility change
-        if (isInTorrents) {
-            showCatFab()
-        } else {
-            showCatFab(false)
+// КОРРЕКТИРОВКА (Баг 1): Выносим проверку в очередь сообщений через post,
+        // чтобы она отработала строго после завершения всех транзакций фрагментов и layout-пассов
+        window.decorView.post {
+            // КОРРЕКТИРОВКА: Игнорируем проверку фрагмента и всегда принудительно отображаем кнопку
+            showSortFab(true)
         }
     }
 
