@@ -1,10 +1,9 @@
 name: Android CI
 
-on:
+oon:
   push:
-branches: [ master ]
-tags:
-- "*"
+    tags:
+      - "*"
   pull_request:
     branches: [ master ]
 
