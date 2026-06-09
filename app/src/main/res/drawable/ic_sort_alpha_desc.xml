@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:tint="?attr/colorBright"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group
+        android:scaleX="0.9"
+        android:scaleY="0.9"
+        android:pivotX="12"
+        android:pivotY="12">
+        <!-- Буква Z (вверху) -->
+        <path
+            android:fillColor="@android:color/white"
+            android:pathData="M4,4.5h5.5v0.9H5.5L9.5,10v0.5H4v-0.9h4L4,5.4z" />
+        <!-- Буква A (внизу) -->
+        <path
+            android:fillColor="@android:color/white"
+            android:pathData="M6.25,13.5h1.5l2.25,6.5h-1.0l-0.6,-1.8H5.6l-0.6,1.8h-1.0zm0.3,3.8h1.9l-0.95,-2.8z" />
+        <!-- Длинная стрелка вниз справа (от Z к A) -->
+        <path
+            android:fillColor="@android:color/white"
+            android:pathData="M17.5,21.5c0.2,0.2 0.5,0.2 0.7,0l3.3,-3.3h-2.5V3h-1.0v15.2h-2.5z" />
+    </group>
+</vector>
