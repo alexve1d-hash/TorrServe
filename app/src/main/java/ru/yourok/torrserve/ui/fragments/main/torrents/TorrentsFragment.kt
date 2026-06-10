@@ -29,8 +29,9 @@ class TorrentsFragment : TSFragment() {
 
     private var torrentAdapter: TorrentsAdapter? = null
     private lateinit var emptyView: TextView
-    //private var sortMode: Boolean = Settings.sortTorrByTitle      //Создает локальную переменную состояния для отслеживания текущего типа сортировки во фрагменте, синхронизируя её с глобальным конфигом.
     private var sortMode: Int = Settings.get("sort_mode_int", 0)    //Изменение типа данных с логического на целочисленный для обеспечения возможности хранения и циклического переключения шести различных режимов сортировки (от 0 до 5) вместо двух.
+    private var currentCategory: String = ""
+    private var currentSearchQuery: String = ""
 	
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -131,40 +132,43 @@ class TorrentsFragment : TSFragment() {
     }
 
 
-suspend fun filter(cat: String = "") = withContext(Dispatchers.Main) {
-        val data = (viewModel as TorrentsViewModel).getData()
-        data.observe(viewLifecycleOwner) { list -> // Безопасный viewLifecycleOwner
-            val fltList = if (cat.isNotBlank())
-                list.filter { it.category?.contains(cat, true) == true }
-            else
-                list
-                
-            // КОРРЕКТИРОВКА: Отфильтрованный список также сортируем под выбранный режим
-            val sortedList = applySort(fltList)
-            torrentAdapter?.update(sortedList)
-            
-            if (sortedList.isEmpty()) {
-                emptyView.visibility = View.VISIBLE
-            } else {
-                emptyView.visibility = View.GONE
-            }
+private fun applyFiltersAndSort(list: List<Torrent>): List<Torrent> {
+        var filteredList = list
+        if (currentCategory.isNotBlank()) {
+            filteredList = filteredList.filter { it.category?.contains(currentCategory, true) == true }
         }
+        if (currentSearchQuery.isNotBlank()) {
+            filteredList = filteredList.filter { it.title?.contains(currentSearchQuery, true) == true }
+        }
+        return applySort(filteredList)
     }
 
-suspend fun start() = withContext(Dispatchers.Main) {
+    private fun dispatchUpdatedList(rawList: List<Torrent>) {
+        val processedList = applyFiltersAndSort(rawList)
+        torrentAdapter?.update(processedList)
+        emptyView.visibility = if (processedList.isEmpty()) View.VISIBLE else View.GONE
+    }
+
+    fun setFilter(query: String) {
+        currentSearchQuery = query
+        val data = (viewModel as? TorrentsViewModel)?.getData()
+        val rawList = data?.value ?: emptyList()
+        dispatchUpdatedList(rawList)
+    }
+
+    suspend fun filter(cat: String = "") = withContext(Dispatchers.Main) {
+        currentCategory = cat
+        val data = (viewModel as TorrentsViewModel).getData()
+        val rawList = data.value ?: emptyList()
+        dispatchUpdatedList(rawList)
+    }
+
+    suspend fun start() = withContext(Dispatchers.Main) {
         viewModel = ViewModelProvider(this@TorrentsFragment)[TorrentsViewModel::class.java]
         val data = (viewModel as TorrentsViewModel).getData()
         (viewModel as TorrentsViewModel).setUpdate(true)
-        data.observe(viewLifecycleOwner) { rawList -> // Используем viewLifecycleOwner для безопасной работы с UI
-            // КОРРЕКТИРОВКА: Автоматически сортируем новые/обновленные данные перед выводом на экран
-            val sortedList = applySort(rawList)
-            torrentAdapter?.update(sortedList)
-            
-            if (sortedList.isEmpty()) {
-                emptyView.visibility = View.VISIBLE
-            } else {
-                emptyView.visibility = View.GONE
-            }
+        data.observe(viewLifecycleOwner) { rawList ->
+            dispatchUpdatedList(rawList)
             
             // Форсируем обновление FAB (решает Баг 1, так как вью фрагмента теперь гарантированно создано)
             (activity as? MainActivity)?.setupSortFab()
