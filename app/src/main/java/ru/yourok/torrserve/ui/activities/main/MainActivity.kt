@@ -10,6 +10,7 @@ import android.text.Spanned
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
@@ -150,8 +151,8 @@ class MainActivity : AppCompatActivity() {
         //TorrService.start()
         updateStatus()
         if (Settings.showFab) setupFab()               //Проверка глобального флага showFab из настроек. Если показ основной FAB-кнопки (для открытия бокового меню) разрешен, вызывается метод её настройки и отображения setupFab().
-    //    if (Settings.showSortFab) setupSortFab()       //Проверка глобального флага showSortFab. Если показ кнопки сортировки разрешен пользователем, вызывается метод инициализации setupSortFab().
 	    setupSortFab()
+		setupTextFilterFab()	
         lifecycleScope.launch(Dispatchers.IO) {
             if (TorrService.wait(10) && isShowCat()) {
                 withContext(Dispatchers.Main) {
@@ -228,8 +229,8 @@ class MainActivity : AppCompatActivity() {
             super.onDrawerOpened(drawerView)
 
             if (Settings.showFab) showFab(false)             //Если в глобальных настройках включен показ основной FAB (кнопки вызова меню), метод скрывает её (false), чтобы она не мешала работе с открытым меню.
-     //       if (Settings.showSortFab) showSortFab(false)     //Если в настройках активирован показ кнопки сортировки, метод принудительно скрывает её с экрана при открытии меню.
-	        showSortFab(false)
+            showSortFab(false)
+            showTextFilterFab(false)                         // Принудительное скрытие кнопки текстового фильтра при открытии бокового меню.
             lifecycleScope.launch(Dispatchers.IO) {
                 if (isShowCat()) withContext(Dispatchers.Main) { showCatFab(false) }
             }
@@ -238,10 +239,10 @@ class MainActivity : AppCompatActivity() {
         override fun onDrawerClosed(drawerView: View) {             //Переопределение метода, который автоматически срабатывает в момент, когда боковая панель полностью закрывается пользователем.
             super.onDrawerClosed(drawerView)
             if (Settings.showFab) showFab()                                  //Если показ основной кнопки меню разрешен в настройках, возвращает её на экран (вызов без аргументов по умолчанию передает true).
-     //       if (Settings.showSortFab && isInTorrents) showSortFab()          //Если показ кнопки сортировки разрешен И пользователь все еще находится на экране списка торрентов, восстанавливает видимость этой кнопки.
-	        if (isInTorrents) {
-        showSortFab(true)
-    }
+            if (isInTorrents) {
+                showSortFab(true)
+                showTextFilterFab(true)                      // Восстановление видимости кнопки текстового фильтра при возврате на экран торрентов.
+            }
             lifecycleScope.launch(Dispatchers.IO) {
                 if (isShowCat() && isInTorrents)
                     withContext(Dispatchers.Main) { showCatFab() }
@@ -383,16 +384,88 @@ class MainActivity : AppCompatActivity() {
 
     fun showSortFab(show: Boolean = true) {
         val fab = findViewById<FloatingActionButton>(R.id.sort_fab) ?: return
-
-        // КОРРЕКТИРОВКА: Полностью убираем ветку скрытия (View.GONE).
-        // Кнопка всегда удерживается в состоянии VISIBLE, выносится на передний план и сбрасывает масштабы.
-        fab.bringToFront()
-        fab.visibility = View.VISIBLE
-        fab.scaleX = 1.0f
-        fab.scaleY = 1.0f
-        fab.alpha = 1.0f
+        if (show) {
+            fab.bringToFront()
+            fab.visibility = View.VISIBLE
+            fab.scaleX = 1.0f
+            fab.scaleY = 1.0f
+            fab.alpha = 1.0f
+        } else {
+            fab.visibility = View.GONE
+        }
     }
 
+    fun setupTextFilterFab() {
+        if (Utils.isTvBox()) return
+        val fab = findViewById<FloatingActionButton>(R.id.filter_fab) ?: return
+        val accentColor = ThemeUtil.getColorFromAttr(this, R.attr.colorAccent)
+        val actionsColor = ThemeUtil.getColorFromAttr(this, R.attr.colorMainMenu)
+
+        fab.apply {
+            setImageResource(R.drawable.round_search_24)
+            customSize = dp2px(32f)
+            setMaxImageSize(dp2px(24f))
+            backgroundTintList = ColorStateList.valueOf(actionsColor)
+            setColorFilter(accentColor)
+            setRippleColor(ColorStateList.valueOf(accentColor))
+            setOnClickListener {
+                val builder = AlertDialog.Builder(this@MainActivity)
+                builder.setTitle("Фильтр торрентов")
+
+                val container = FrameLayout(this@MainActivity)
+                val params = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    leftMargin = dp2px(20f)
+                    rightMargin = dp2px(20f)
+                    topMargin = dp2px(10f)
+                    bottomMargin = dp2px(10f)
+                }
+
+                val input = EditText(this@MainActivity).apply {
+                    layoutParams = params
+                    hint = "Введите текст для поиска..."
+                    setSingleLine()
+                }
+                container.addView(input)
+                builder.setView(container)
+
+                builder.setPositiveButton("Применить") { dialog, _ ->
+                    val filterText = input.text.toString().trim()
+                    val fragment = supportFragmentManager.findFragmentById(R.id.container) as? TorrentsFragment
+                    fragment?.setFilter(filterText)
+                    dialog.dismiss()
+                }
+
+                builder.setNegativeButton("Сбросить") { dialog, _ ->
+                    val fragment = supportFragmentManager.findFragmentById(R.id.container) as? TorrentsFragment
+                    fragment?.setFilter("")
+                    dialog.dismiss()
+                }
+
+                val dialog = builder.create()
+                dialog.show()
+            }
+        }
+        window.decorView.post {
+            showTextFilterFab(true)
+        }
+    }
+
+    fun showTextFilterFab(show: Boolean = true) {
+        val fab = findViewById<FloatingActionButton>(R.id.filter_fab) ?: return
+        if (show) {
+            fab.bringToFront()
+            fab.visibility = View.VISIBLE
+            fab.scaleX = 1.0f
+            fab.scaleY = 1.0f
+            fab.alpha = 1.0f
+        } else {
+            fab.visibility = View.GONE
+        }
+    }
+	
     private var isCatsOpen = false
     private var movFab: FloatingActionButton? = null
     private var movText: TextView? = null
