@@ -29,7 +29,9 @@ class TorrentsFragment : TSFragment() {
 
     private var torrentAdapter: TorrentsAdapter? = null
     private lateinit var emptyView: TextView
-    private var sortMode: Int = Settings.get("sort_mode_int", 0)
+    private var sortMode: Int = Settings.get("sort_mode_int", 0)    //Изменение типа данных с логического на целочисленный для обеспечения возможности хранения и циклического переключения шести различных режимов сортировки (от 0 до 5) вместо двух.
+    private var currentCategory: String = ""
+    private var currentSearchQuery: String = ""
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -110,25 +112,37 @@ class TorrentsFragment : TSFragment() {
         activity?.findViewById<ListView>(R.id.lvTorrents)?.setSelection(0)
     }
 
-    suspend fun filter(cat: String = "") = withContext(Dispatchers.Main) {
-        val data = (viewModel as TorrentsViewModel).getData()
-        data.observe(viewLifecycleOwner) { list ->
-            val fltList = if (cat == "uncategorized")
-                list.filter { it.category.isNullOrBlank() }
-            else if (cat.isNotBlank())
-                list.filter { it.category?.contains(cat, true) == true }
-            else
-                list
-                
-            val sortedList = applySort(fltList)
-            torrentAdapter?.update(sortedList)
-            
-            if (sortedList.isEmpty()) {
-                emptyView.visibility = View.VISIBLE
-            } else {
-                emptyView.visibility = View.GONE
-            }
+    private fun applyFiltersAndSort(list: List<Torrent>): List<Torrent> {
+        var filteredList = list
+        if (currentCategory == "uncategorized") {
+            filteredList = filteredList.filter { it.category.isNullOrBlank() }
+        } else if (currentCategory.isNotBlank()) {
+            filteredList = filteredList.filter { it.category?.contains(currentCategory, true) == true }
         }
+        if (currentSearchQuery.isNotBlank()) {
+            filteredList = filteredList.filter { it.title?.contains(currentSearchQuery, true) == true }
+        }
+        return applySort(filteredList)
+    }
+
+    private fun dispatchUpdatedList(rawList: List<Torrent>) {
+        val processedList = applyFiltersAndSort(rawList)
+        torrentAdapter?.update(processedList)
+        emptyView.visibility = if (processedList.isEmpty()) View.VISIBLE else View.GONE
+    }
+
+    fun setFilter(query: String) {
+        currentSearchQuery = query
+        val data = (viewModel as? TorrentsViewModel)?.getData()
+        val rawList = data?.value ?: emptyList()
+        dispatchUpdatedList(rawList)
+    }
+
+    suspend fun filter(cat: String = "") = withContext(Dispatchers.Main) {
+        currentCategory = cat
+        val data = (viewModel as TorrentsViewModel).getData()
+        val rawList = data.value ?: emptyList()
+        dispatchUpdatedList(rawList)
     }
 
     suspend fun start() = withContext(Dispatchers.Main) {
@@ -136,15 +150,7 @@ class TorrentsFragment : TSFragment() {
         val data = (viewModel as TorrentsViewModel).getData()
         (viewModel as TorrentsViewModel).setUpdate(true)
         data.observe(viewLifecycleOwner) { rawList ->
-            val sortedList = applySort(rawList)
-            torrentAdapter?.update(sortedList)
-            
-            if (sortedList.isEmpty()) {
-                emptyView.visibility = View.VISIBLE
-            } else {
-                emptyView.visibility = View.GONE
-            }
-            
+            dispatchUpdatedList(rawList)
             (activity as? MainActivity)?.setupSortFab()
         }
     }
