@@ -1,0 +1,27 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:tint="?attr/colorBright"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group
+        android:scaleX="0.9"
+        android:scaleY="0.9"
+        android:pivotX="12"
+        android:pivotY="12">
+        <!-- Столбцы гистограммы размеров (увеличение слева направо) -->
+        <path
+            android:fillColor="@android:color/white"
+            android:pathData="M4,17h2.5v3H4z" />
+        <path
+            android:fillColor="@android:color/white"
+            android:pathData="M8,13h2.5v7H8z" />
+        <path
+            android:fillColor="@android:color/white"
+            android:pathData="M12,9h2.5v11H12z" />
+        <!-- Стрелка вверх (возрастание) справа -->
+        <path
+            android:fillColor="@android:color/white"
+            android:pathData="M20,6.5l-3.5,3.5 0.64,0.64 2.41,-2.41V20h0.9v-11.77l2.41,2.41 0.64,-0.64z" />
+    </group>
+</vector>
