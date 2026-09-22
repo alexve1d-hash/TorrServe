@@ -1,0 +1,24 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:tint="?attr/colorBright"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group
+        android:scaleX="0.9"
+        android:scaleY="0.9"
+        android:pivotX="12"
+        android:pivotY="12">
+        <!-- Иконка часов/времени -->
+        <path
+            android:fillColor="@android:color/white"
+            android:pathData="M11,2C6.03,2 2,6.03 2,11s4.03,9 9,9 9,-4.03 9,-9 -4.03,-9 -9,-9zM11,18.2c-3.97,0 -7.2,-3.23 -7.2,-7.2S7.03,3.8 11,3.8s7.2,3.23 7.2,7.2 -3.23,7.2 -7.2,7.2z" />
+        <path
+            android:fillColor="@android:color/white"
+            android:pathData="M11.45,6.5h-0.9v5.13l4.03,2.42 0.45,-0.74 -3.58,-2.13z" />
+        <!-- Стрелка вверх (возрастание) -->
+        <path
+            android:fillColor="@android:color/white"
+            android:pathData="M20,11.5l-3.5,3.5 0.64,0.64 2.41,-2.41V20h0.9v-6.77l2.41,2.41 0.64,-0.64z" />
+    </group>
+</vector>
